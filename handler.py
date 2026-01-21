@@ -4,15 +4,14 @@ import os
 import subprocess
 import time
 import requests
+import base64
 import random
 
 def verify_models():
     print("--- MODEL VERIFICATION START ---")
-    # This checks if the files are visible inside the container
     target_path = "/comfyui/models/diffusion_models"
     if os.path.exists(target_path):
-        print(f"Success: Found diffusion_models folder.")
-        print(f"Files inside: {os.listdir(target_path)}")
+        print(f"Success: Found models at {target_path}")
     else:
         print(f"Error: Cannot find models at {target_path}")
     print("--- MODEL VERIFICATION END ---")
@@ -22,11 +21,10 @@ try:
     print("Starting ComfyUI Server...")
     subprocess.Popen(["python", "main.py", "--listen", "0.0.0.0", "--port", "8188"])
 
-    # Health check for ComfyUI
     for i in range(30):
         try:
             if requests.get("http://127.0.0.1:8188").status_code == 200:
-                print("Server is Ready!")
+                print("ComfyUI Server is Ready!")
                 break
         except:
             pass
@@ -47,10 +45,48 @@ def handler(job):
             workflow["58"]["inputs"]["value"] = prompt_text
         
         if "57:3" in workflow:
-            workflow["57:3"]["inputs"]["seed"] = random.randint(1, 1000000)
+            workflow["57:3"]["inputs"]["seed"] = random.randint(1, 1000000000)
 
+        # 1. Send Prompt to ComfyUI
         res = requests.post("http://127.0.0.1:8188/prompt", json={"prompt": workflow})
-        return {"status": "success", "data": res.json()}
+        res_data = res.json()
+        prompt_id = res_data["prompt_id"]
+        print(f"Prompt sent. ID: {prompt_id}")
+
+        # 2. Wait for the image generation to complete
+        max_wait = 60 # 1 minute timeout
+        start_time = time.time()
+        
+        while True:
+            if time.time() - start_time > max_wait:
+                return {"error": "Generation timed out"}
+
+            history_res = requests.get(f"http://127.0.0.1:8188/history/{prompt_id}")
+            history = history_res.json()
+
+            if prompt_id in history:
+                # 3. Find the image filename in the history
+                # Node 9 is standard for SaveImage in many workflows
+                outputs = history[prompt_id]["outputs"]
+                for node_id in outputs:
+                    if "images" in outputs[node_id]:
+                        image_info = outputs[node_id]["images"][0]
+                        filename = image_info["filename"]
+                        subfolder = image_info.get("subfolder", "")
+                        
+                        # 4. Read the image and convert to Base64
+                        image_path = os.path.join("/comfyui/output", subfolder, filename)
+                        with open(image_path, "rb") as img_file:
+                            base64_image = base64.b64encode(img_file.read()).decode("utf-8")
+                        
+                        print(f"Image generated and converted: {filename}")
+                        return {
+                            "status": "success",
+                            "image": base64_image
+                        }
+            
+            time.sleep(1)
+
     except Exception as e:
         return {"error": str(e)}
 
