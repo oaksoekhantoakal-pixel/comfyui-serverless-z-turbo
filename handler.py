@@ -7,7 +7,6 @@ import requests
 import base64
 import random
 
-# Error ရှာဖွေရန် function
 def check_paths():
     paths_to_check = [
         "/runpod-volume",
@@ -15,61 +14,60 @@ def check_paths():
         "/comfyui/models",
         "workflow_api.json"
     ]
-    print("--- PATH CHECK START ---")
+    print("--- STARTING PATH CHECK ---")
     for p in paths_to_check:
         exists = os.path.exists(p)
-        print(f"Checking {p}: {'EXISTS' if exists else 'NOT FOUND'}")
-    print("--- PATH CHECK END ---")
+        print(f"Path {p}: {'EXISTS' if exists else 'NOT FOUND'}")
+    print("--- END PATH CHECK ---")
 
 try:
     check_paths()
-    
-    print("Starting ComfyUI Server...")
-    # main.py ရှိမရှိ စစ်ပါ
-    if not os.path.exists("main.py"):
-        print("ERROR: main.py not found in /comfyui!")
-    
+    print("Launching ComfyUI Server...")
     subprocess.Popen(["python", "main.py", "--listen", "0.0.0.0", "--port", "8188"])
 
-    # Server တက်လာအောင် စောင့်ခြင်း
-    max_retries = 30
+    # Wait for server to be ready
     ready = False
-    for i in range(max_retries):
+    for i in range(30):
         try:
             response = requests.get("http://127.0.0.1:8188")
             if response.status_code == 200:
-                print("ComfyUI is ready!")
+                print("ComfyUI Server is up and running!")
                 ready = True
                 break
         except:
             pass
-        if i % 5 == 0: print(f"Waiting for ComfyUI... ({i}/{max_retries})")
         time.sleep(2)
     
     if not ready:
-        print("ERROR: ComfyUI server failed to start in time.")
-
+        print("CRITICAL: ComfyUI failed to start.")
 except Exception as e:
-    print(f"CRITICAL STARTUP ERROR: {str(e)}")
+    print(f"BOOT ERROR: {str(e)}")
 
-# Workflow ဖတ်ခြင်း
+# Load JSON
 with open("workflow_api.json", "r") as f:
     workflow_template = json.load(f)
 
 def handler(job):
     try:
         job_input = job["input"]
-        prompt_text = job_input.get("prompt", "A beautiful landscape")
+        prompt_text = job_input.get("prompt", "A beautiful portrait")
+        
+        # Clone workflow template
         workflow = json.loads(json.dumps(workflow_template))
 
-        # Node 58 update
+        # Update Node 58 with user prompt
         if "58" in workflow:
             workflow["58"]["inputs"]["value"] = prompt_text
 
-        # Queue prompt
-        p = {"prompt": workflow}
-        res = requests.post("http://127.0.0.1:8188/prompt", json=p)
-        return {"status": "success", "data": res.json()}
+        # Generate Random Seed for Node 57:3
+        if "57:3" in workflow:
+            workflow["57:3"]["inputs"]["seed"] = random.randint(1, 1000000)
+
+        # Send request to ComfyUI
+        payload = {"prompt": workflow}
+        res = requests.post("http://127.0.0.1:8188/prompt", json=payload)
+        
+        return {"status": "success", "response": res.json()}
     except Exception as e:
         return {"error": str(e)}
 
