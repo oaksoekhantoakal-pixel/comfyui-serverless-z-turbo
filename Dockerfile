@@ -11,7 +11,9 @@ WORKDIR /comfyui
 RUN pip install --upgrade pip && pip install -r requirements.txt && pip install runpod requests
 
 # Linking your network volume to ComfyUI models folder
-RUN rm -rf /comfyui/models && ln -s /runpod-volume/ComfyUI/models /comfyui/models
+RUN rm -rf /comfyui/models/diffusion_models && ln -s /runpod-volume/ComfyUI/models/diffusion_models /comfyui/models/diffusion_models
+RUN rm -rf /comfyui/models/vae && ln -s /runpod-volume/ComfyUI/models/vae /comfyui/models/vae
+RUN rm -rf /comfyui/models/text_encoders && ln -s /runpod-volume/ComfyUI/models/text_encoders /comfyui/models/text_encoders
 
 COPY workflow_api.json /comfyui/workflow_api.json
 COPY handler.py /comfyui/handler.py
