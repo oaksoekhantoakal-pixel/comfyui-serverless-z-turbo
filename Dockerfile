@@ -8,11 +8,10 @@ RUN apt-get update && apt-get install -y git wget libgl1-mesa-glx libglib2.0-0 &
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui
 WORKDIR /comfyui
 
-RUN pip install --upgrade pip && pip install -r requirements.txt && pip install runpod requests websocket-client
+RUN pip install --upgrade pip && pip install -r requirements.txt && pip install runpod requests
 
-# Standardizing the Volume path
-RUN rm -rf /comfyui/models && mkdir -p /runpod-volume/ComfyUI/models
-RUN ln -s /runpod-volume/ComfyUI/models /comfyui/models
+# Linking your network volume to ComfyUI models folder
+RUN rm -rf /comfyui/models && ln -s /runpod-volume/ComfyUI/models /comfyui/models
 
 COPY workflow_api.json /comfyui/workflow_api.json
 COPY handler.py /comfyui/handler.py
